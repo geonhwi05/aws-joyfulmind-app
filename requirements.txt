@@ -1,0 +1,7 @@
+Flask==3.0.3
+flask-restful
+mysql-connector-python
+psycopg-binary
+passlib
+flask-jwt-extended
+email-validator
