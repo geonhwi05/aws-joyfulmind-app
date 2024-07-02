@@ -25,11 +25,7 @@ class UserRegisterResource(Resource):
         if len(data['password']) < 4 or len(data['password']) > 12:
             return {'result': 'fail', 'message': 'Password must be between 4 and 12 characters'}, 400
 
-        # 성별 값 변환
-        gender_map = {'남자': 1, '여자': 0}
-        gender = gender_map.get(data['gender'])
-        if gender is None:
-            return {'result': 'fail', 'message': 'Invalid gender'}, 400
+
 
         # 비밀번호 암호화
         password = hash_password(data['password'])
@@ -39,7 +35,7 @@ class UserRegisterResource(Resource):
             connection = get_connection()
             query = '''INSERT INTO user (email, password,nickname, age, gender)
                        VALUES (%s, %s, %s, %s, %s);'''
-            record = (data['email'], password,data['nickname'],data['age'],gender)
+            record = (data['email'], password,data['nickname'],data['age'],data['gender'])
             cursor = connection.cursor()
             cursor.execute(query, record)
             connection.commit()
