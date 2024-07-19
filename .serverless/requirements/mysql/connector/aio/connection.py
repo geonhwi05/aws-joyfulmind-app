@@ -66,6 +66,7 @@ from ..constants import (
     ServerCmd,
     ServerFlag,
     flag_is_set,
+    raise_warning_against_deprecated_cursor_class,
 )
 from ..errors import (
     DatabaseError,
@@ -237,17 +238,8 @@ class MySQLConnection(MySQLConnectionAbstract):
             )
         elif self._charset_name:
             self._charset = charsets.get_by_name(self._charset_name)
-            self._charset_collation = self._charset.collation
         elif self._charset_collation:
             self._charset = charsets.get_by_collation(self._charset_collation)
-            self._charset_name = self._charset.name
-        else:
-            # The default charset from the server handshake should be used instead,
-            # as `charsets.get_by_id(self._server_info.charset)`.
-            # The charset id 45 is used to be aligned with the current implementation.
-            self._charset = charsets.get_by_id(45)
-            self._charset_name = self._charset.name
-            self._charset_collation = self._charset.collation
 
         if not self._handshake["capabilities"] & ClientFlag.SSL:
             if self._auth_plugin == "mysql_clear_password" and not self.is_secure:
@@ -713,7 +705,7 @@ class MySQLConnection(MySQLConnectionAbstract):
 
         Raises:
             ProgrammingError: When cursor_class is not a subclass of
-                              CursorBase.
+                              MySQLCursor.
             ValueError: When cursor is not available.
         """
         if not self._socket or not self._socket.is_connected():
@@ -758,6 +750,9 @@ class MySQLConnection(MySQLConnectionAbstract):
             24: MySQLCursorPreparedNamedTuple,
         }
         try:
+            raise_warning_against_deprecated_cursor_class(
+                cursor_name=types[cursor_type].__name__
+            )
             return (types[cursor_type])(self)
         except KeyError:
             args = ("buffered", "raw", "dictionary", "named_tuple", "prepared")
@@ -1176,6 +1171,7 @@ class MySQLConnection(MySQLConnectionAbstract):
         ):
             raise ValueError("Invalid command REFRESH option")
 
+        res = None
         if options & RefreshOption.GRANT:
             res = await self.cmd_query("FLUSH PRIVILEGES")
         if options & RefreshOption.LOG:
@@ -1292,10 +1288,10 @@ class MySQLConnection(MySQLConnectionAbstract):
 
     async def cmd_change_user(
         self,
-        user: str = "",
+        username: str = "",
         password: str = "",
         database: str = "",
-        charset: int = 45,
+        charset: Optional[int] = None,
         password1: str = "",
         password2: str = "",
         password3: str = "",
@@ -1307,20 +1303,24 @@ class MySQLConnection(MySQLConnectionAbstract):
         This method allows to change the current logged in user information.
         The result is a dictionary with OK packet information.
         """
-        if not isinstance(charset, int):
-            raise ValueError("charset must be an integer")
-        if charset < 0:
-            raise ValueError("charset should be either zero or a postive integer")
+        # If charset isn't defined, we use the same charset ID defined previously,
+        # otherwise, we run a verification and update the charset ID.
+        if charset is not None:
+            if not isinstance(charset, int):
+                raise ValueError("charset must be an integer")
+            if charset < 0:
+                raise ValueError("charset should be either zero or a postive integer")
+            self._charset = charsets.get_by_id(charset)
 
         self._mfa_nfactor = 1
-        self._user = user
+        self._user = username
         self._password = password
         self._password1 = password1
         self._password2 = password2
         self._password3 = password3
 
         if self._password1 and password != self._password1:
-            password = self._password1
+            self._password = self._password1
 
         await self.handle_unread_result()
 
@@ -1332,28 +1332,27 @@ class MySQLConnection(MySQLConnectionAbstract):
 
         self._oci_config_profile = oci_config_profile
 
-        packet = self._protocol.make_auth(
+        ok_packet: bytes = await self._authenticator.authenticate(
+            sock=self._socket,
             handshake=self._handshake,
             username=self._user,
-            password=self._password,
+            password1=self._password,
+            password2=self._password2,
+            password3=self._password3,
             database=self._database,
-            charset=charset,
+            charset=self._charset.charset_id,
             client_flags=self._client_flags,
             ssl_enabled=self._ssl_active,
             auth_plugin=self._auth_plugin,
             conn_attrs=self._connection_attrs,
             auth_plugin_class=self._auth_plugin_class,
+            oci_config_file=self._oci_config_file,
+            oci_config_profile=self._oci_config_profile,
+            is_change_user_request=True,
         )
-        logger.debug("Protocol::HandshakeResponse packet: %s", packet)
-        await self._socket.write(packet[0])
-
-        ok_packet = self._handle_ok(await self._socket.read())
 
         if not (self._client_flags & ClientFlag.CONNECT_WITH_DB) and database:
             await self.cmd_init_db(database)
-
-        self._charset = charsets.get_by_id(charset)
-        self._charset_name = self._charset.name
 
         # return ok_pkt
         return self._handle_ok(ok_packet)

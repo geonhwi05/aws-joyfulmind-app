@@ -75,6 +75,8 @@ from ..abstracts import (
 from ..constants import (
     CONN_ATTRS_DN,
     DEFAULT_CONFIGURATION,
+    MYSQL_DEFAULT_CHARSET_ID_57,
+    MYSQL_DEFAULT_CHARSET_ID_80,
     OPENSSL_CS_NAMES,
     TLS_CIPHER_SUITES,
     TLS_VERSIONS,
@@ -190,6 +192,7 @@ class MySQLConnectionAbstract(ABC):
         converter_str_fallback: bool = False,
         connection_timeout: int = DEFAULT_CONFIGURATION["connect_timeout"],
         unix_socket: Optional[str] = None,
+        use_unicode: Optional[bool] = True,
         ssl_ca: Optional[str] = None,
         ssl_cert: Optional[str] = None,
         ssl_key: Optional[str] = None,
@@ -200,6 +203,14 @@ class MySQLConnectionAbstract(ABC):
         tls_ciphersuites: Optional[List[str]] = None,
         loop: Optional[asyncio.AbstractEventLoop] = None,
     ):
+        # private (shouldn't be manipulated directly internally)
+        self.__charset: Optional[Charset] = None
+        """It shouldn't be manipulated directly, even internally. If you need
+        to manipulate the charset object, use the property `_charset` (read & write)
+        instead. Similarly, `_charset` shouldn't be manipulated externally.
+        """
+
+        # protected (can be manipulated directly internally)
         self._user: str = user
         self._password: str = password
         self._host: str = host
@@ -219,9 +230,10 @@ class MySQLConnectionAbstract(ABC):
         self._init_command: Optional[str] = init_command
         self._protocol: MySQLProtocol = MySQLProtocol()
         self._socket: Optional[Union[MySQLTcpSocket, MySQLUnixSocket]] = None
-        self._charset: Optional[Charset] = None
         self._charset_name: Optional[str] = charset
+        """Charset name provided by the user at connection time."""
         self._charset_collation: Optional[str] = collation
+        """Collation provided by the user at connection time."""
         self._ssl_active: bool = False
         self._ssl_disabled: bool = ssl_disabled
         self._ssl_ca: Optional[str] = ssl_ca
@@ -238,7 +250,7 @@ class MySQLConnectionAbstract(ABC):
             loop or asyncio.get_event_loop()
         )
         self._client_flags: int = client_flags or ClientFlag.get_default()
-        self._server_info: ServerInfo
+        self._server_info: Optional[ServerInfo] = None
         self._cursors: weakref.WeakSet = weakref.WeakSet()
         self._query_attrs: Dict[str, BinaryProtocolType] = {}
         self._query_attrs_supported: int = False
@@ -254,9 +266,9 @@ class MySQLConnectionAbstract(ABC):
         self.raise_on_warnings: bool = raise_on_warnings
         self._buffered: bool = buffered
         self._raw: bool = raw
+        self._use_unicode: bool = use_unicode
         self._have_next_result: bool = False
         self._unread_result: bool = False
-        self._use_unicode: bool = True
         self._in_transaction: bool = False
         self._oci_config_file: Optional[str] = None
         self._oci_config_profile: Optional[str] = None
@@ -893,6 +905,18 @@ class MySQLConnectionAbstract(ABC):
         self._unread_result = value
 
     @property
+    def collation(self) -> str:
+        """Returns the collation for current connection.
+
+        This property returns the collation name of the current connection.
+        The server is queried when the connection is active. If not connected,
+        the configured collation name is returned.
+
+        Returns a string.
+        """
+        return self._charset.collation
+
+    @property
     def charset(self) -> str:
         """Return the character set for current connection.
 
@@ -900,7 +924,40 @@ class MySQLConnectionAbstract(ABC):
         The server is queried when the connection is active.
         If not connected, the configured character set name is returned.
         """
-        return self._charset.name if self._charset else "utf8"
+        return self._charset.name
+
+    @property
+    def charset_id(self) -> int:
+        """The charset ID utilized during the connection phase.
+
+        If the charset ID hasn't been set, the default charset ID is returned.
+        """
+        return self._charset.charset_id
+
+    @property
+    def _charset(self) -> Charset:
+        """The charset object encapsulates charset and collation information."""
+        if self.__charset is None:
+            if self._server_info is None:
+                # We mustn't set `_charset`  since we still don't know
+                # the server version. We temporarily return the default
+                # charset for undefined scenarios - eventually, the server
+                # info will be available and `_charset` (data class) will be set.
+                return charsets.get_by_id(MYSQL_DEFAULT_CHARSET_ID_57)
+
+            self.__charset = charsets.get_by_id(
+                (
+                    MYSQL_DEFAULT_CHARSET_ID_57
+                    if self._server_info.version_tuple < (8, 0)
+                    else MYSQL_DEFAULT_CHARSET_ID_80
+                )
+            )
+        return self.__charset
+
+    @_charset.setter
+    def _charset(self, value: Charset) -> None:
+        """The charset object encapsulates charset and collation information."""
+        self.__charset = value
 
     @property
     def python_charset(self) -> str:
@@ -939,7 +996,7 @@ class MySQLConnectionAbstract(ABC):
         Some setting like autocommit, character set, and SQL mode are set using this
         method.
         """
-        await self.set_charset_collation(self._charset.charset_id)
+        await self.set_charset_collation(charset=self._charset.charset_id)
         await self.set_autocommit(self._autocommit)
         if self._time_zone:
             await self.set_time_zone(self._time_zone)
@@ -999,18 +1056,9 @@ class MySQLConnectionAbstract(ABC):
             charset = DEFAULT_CONFIGURATION["charset"]
             self._charset = charsets.get_by_name(charset)  # type: ignore[arg-type]
 
-        self._charset_name = self._charset.name
-        self._charset_collation = self._charset.collation
-
         await self.cmd_query(
             f"SET NAMES '{self._charset.name}' COLLATE '{self._charset.collation}'"
         )
-        try:
-            # Required for C Extension
-            self.set_character_set_name(self._charset.name)
-        except AttributeError:
-            # Not required for pure Python connection
-            pass
 
         if self.converter:
             self.converter.set_charset(self._charset.name)
@@ -1047,7 +1095,9 @@ class MySQLConnectionAbstract(ABC):
             The MySQL server version as a tuple. If not previously connected, it will
             return `None`.
         """
-        return self._server_info.version  # type: ignore[return-value]
+        if self._server_info is not None:
+            return self._server_info.version  # type: ignore[return-value]
+        return None
 
     def get_server_info(self) -> Optional[str]:
         """Gets the original MySQL version information.
@@ -1288,7 +1338,7 @@ class MySQLConnectionAbstract(ABC):
 
         Raises:
             ProgrammingError: When cursor_class is not a subclass of
-                              CursorBase.
+                              MySQLCursor.
             ValueError: When cursor is not available.
         """
 
@@ -1505,6 +1555,51 @@ class MySQLConnectionAbstract(ABC):
         This method sends the PING command to the MySQL server. It is used to check
         if the the connection is still valid. The result of this method is dictionary
         with OK packet information.
+        """
+
+    @abstractmethod
+    async def cmd_change_user(
+        self,
+        username: str = "",
+        password: str = "",
+        database: str = "",
+        charset: Optional[int] = None,
+        password1: str = "",
+        password2: str = "",
+        password3: str = "",
+        oci_config_file: str = "",
+        oci_config_profile: str = "",
+    ) -> Optional[OkPacketType]:
+        """Changes the current logged in user.
+
+        It also causes the specified database to become the default (current)
+        database. It is also possible to change the character set using the
+        charset argument. The character set passed during initial connection
+        is reused if no value of charset is passed via this method.
+
+        Args:
+            username: New account's username.
+            password: New account's password.
+            database: Database to become the default (current) database.
+            charset: Client charset (see [1]), only the lower 8-bits.
+            password1: New account's password factor 1 - it's used instead
+                       of `password` if set (higher precedence).
+            password2: New account's password factor 2.
+            password3: New account's password factor 3.
+            oci_config_file: OCI configuration file location (path-like string).
+            oci_config_profile: OCI configuration profile location (path-like string).
+
+        Returns:
+            ok_packet: Dictionary containing the OK packet information.
+
+        Examples:
+            ```
+            >>> cnx.cmd_change_user(username='', password='', database='', charset=33)
+            ```
+
+        References:
+            [1]: https://dev.mysql.com/doc/dev/mysql-server/latest/\
+                page_protocol_basic_character_set.html#a_protocol_character_set
         """
 
 
@@ -1772,8 +1867,6 @@ class MySQLCursorAbstract(ABC):
         Returns:
             List of existing query attributes.
         """
-        if hasattr(self, "_cnx"):
-            return self._cnx.query_attrs
         if hasattr(self, "_connection"):
             return self._connection.query_attrs
         return None

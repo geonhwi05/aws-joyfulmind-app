@@ -8,6 +8,7 @@
       "name": "aws",
       "runtime": "python3.10",
       "region": "ap-northeast-2",
+      "profile": "api_dev",
       "stage": "dev",
       "versionFunctions": true,
       "compiledCloudFormationTemplate": {
@@ -174,7 +175,7 @@
                 "S3Bucket": {
                   "Ref": "ServerlessDeploymentBucket"
                 },
-                "S3Key": "serverless/aws-joyfulmind-app/dev/1719814488069-2024-07-01T06:14:48.069Z/api.zip"
+                "S3Key": "serverless/aws-joyfulmind-app/dev/1721376232356-2024-07-19T08:03:52.356Z/api.zip"
               },
               "Handler": "wsgi_handler.handler",
               "Runtime": "python3.10",
@@ -192,14 +193,14 @@
               "ApiLogGroup"
             ]
           },
-          "ApiLambdaVersionjUhWvK4amLTa9qB0l6rddpTO3VXk2MEeW7YoiAIFiW0": {
+          "ApiLambdaVersionzuKLy0rdfgKtW82a25DVIfIljUZf5WDXDQ37EXCJdk": {
             "Type": "AWS::Lambda::Version",
             "DeletionPolicy": "Retain",
             "Properties": {
               "FunctionName": {
                 "Ref": "ApiLambdaFunction"
               },
-              "CodeSha256": "zfC4jcP/eiYNAgXl0/dgV+aGPCvAU7rnYvyx80yjsqY="
+              "CodeSha256": "5szQtt5r5l2TfvxOxMwNuPpLknoqYQL4yOUNBzpzdb8="
             }
           },
           "ApiGatewayRestApi": {
@@ -324,7 +325,7 @@
               "ApiLambdaPermissionApiGateway"
             ]
           },
-          "ApiGatewayDeployment1719814380425": {
+          "ApiGatewayDeployment1721376155625": {
             "Type": "AWS::ApiGateway::Deployment",
             "Properties": {
               "RestApiId": {
@@ -387,7 +388,7 @@
           "ApiLambdaFunctionQualifiedArn": {
             "Description": "Current Lambda function version",
             "Value": {
-              "Ref": "ApiLambdaVersionjUhWvK4amLTa9qB0l6rddpTO3VXk2MEeW7YoiAIFiW0"
+              "Ref": "ApiLambdaVersionzuKLy0rdfgKtW82a25DVIfIljUZf5WDXDQ37EXCJdk"
             },
             "Export": {
               "Name": "sls-aws-joyfulmind-app-dev-ApiLambdaFunctionQualifiedArn"
@@ -512,10 +513,8 @@
       "pythonRequirements": {
         "dockerizePip": true,
         "useStaticCache": false,
-        "useDownloadCache": false,
-        "pipCmdExtraArgs": [
-          "--no-cache-dir"
-        ]
+        "slim": true,
+        "strip": false
       }
     },
     "plugins": [
@@ -551,7 +550,7 @@
         "timeout": 6,
         "runtime": "python3.10",
         "vpc": {},
-        "versionLogicalId": "ApiLambdaVersionjUhWvK4amLTa9qB0l6rddpTO3VXk2MEeW7YoiAIFiW0"
+        "versionLogicalId": "ApiLambdaVersionzuKLy0rdfgKtW82a25DVIfIljUZf5WDXDQ37EXCJdk"
       }
     },
     "configValidationMode": "warn",
@@ -560,14 +559,14 @@
       "org": "onmyway",
       "app": "joyfulmind-app",
       "service": "aws-joyfulmind-app",
-      "custom": {
-        "$ref": "$[\"service\"][\"custom\"]"
-      },
       "provider": {
         "$ref": "$[\"service\"][\"provider\"]"
       },
       "functions": {
         "$ref": "$[\"service\"][\"functions\"]"
+      },
+      "custom": {
+        "$ref": "$[\"service\"][\"custom\"]"
       },
       "plugins": {
         "$ref": "$[\"service\"][\"plugins\"]"
@@ -577,12 +576,15 @@
         "exclude": [
           "node_modules/**",
           ".git/**",
-          "tests/**"
+          "tests/**",
+          "**/*.csv"
         ],
         "include": [
-          "app/**",
+          "src/**",
           "handler.py",
-          "config/**"
+          "config/**",
+          "sbert_model/**",
+          "data/**"
         ],
         "artifactsS3KeyDirname": "serverless/aws-joyfulmind-app/dev/code-artifacts",
         "patterns": [
@@ -590,7 +592,7 @@
           "serverless_wsgi.py",
           ".serverless-wsgi"
         ],
-        "artifactDirectoryName": "serverless/aws-joyfulmind-app/dev/1719814488069-2024-07-01T06:14:48.069Z"
+        "artifactDirectoryName": "serverless/aws-joyfulmind-app/dev/1721376232356-2024-07-19T08:03:52.356Z"
       }
     },
     "app": "joyfulmind-app",
@@ -601,7 +603,7 @@
   },
   "package": {
     "individually": true,
-    "artifactDirectoryName": "serverless/aws-joyfulmind-app/dev/1719814488069-2024-07-01T06:14:48.069Z",
+    "artifactDirectoryName": "serverless/aws-joyfulmind-app/dev/1721376232356-2024-07-19T08:03:52.356Z",
     "artifact": ""
   }
 }

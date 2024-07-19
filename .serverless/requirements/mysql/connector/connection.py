@@ -66,10 +66,10 @@ from .constants import (
     ServerCmd,
     ServerFlag,
     flag_is_set,
+    raise_warning_against_deprecated_cursor_class,
 )
 from .conversion import MySQLConverter
 from .cursor import (
-    CursorBase,
     MySQLCursor,
     MySQLCursorBuffered,
     MySQLCursorBufferedDict,
@@ -137,7 +137,6 @@ class MySQLConnection(MySQLConnectionAbstract):
         self._converter_class: Type[MySQLConverter] = MySQLConverter
 
         self._client_flags: int = ClientFlag.get_default()
-        self._charset_id: int = 45
         self._sql_mode: Optional[str] = None
         self._time_zone: Optional[str] = None
         self._autocommit: bool = False
@@ -255,7 +254,6 @@ class MySQLConnection(MySQLConnectionAbstract):
         password: Optional[str] = None,
         database: Optional[str] = None,
         client_flags: int = 0,
-        charset: int = 45,
         ssl_options: Optional[Dict[str, Optional[Union[str, bool, List[str]]]]] = None,
         conn_attrs: Optional[Dict[str, str]] = None,
     ) -> bool:
@@ -291,7 +289,7 @@ class MySQLConnection(MySQLConnectionAbstract):
                 self._socket,
                 self.server_host,
                 ssl_options,
-                charset=charset,
+                charset=self._charset_id,
                 client_flags=client_flags,
             )
             self._ssl_active = True
@@ -304,7 +302,7 @@ class MySQLConnection(MySQLConnectionAbstract):
             password2=self._password2,
             password3=self._password3,
             database=database,
-            charset=charset,
+            charset=self._charset_id,
             client_flags=client_flags,
             auth_plugin=self._auth_plugin,
             auth_plugin_class=self._auth_plugin_class,
@@ -367,7 +365,6 @@ class MySQLConnection(MySQLConnectionAbstract):
                 self._password,
                 self._database,
                 self._client_flags,
-                self._charset_id,
                 self._ssl,
                 self._conn_attrs,
             )
@@ -418,6 +415,7 @@ class MySQLConnection(MySQLConnectionAbstract):
     def close(self) -> None:
         """Disconnect from the MySQL server"""
         if self._span and self._span.is_recording():
+            # pylint: disable=possibly-used-before-assignment
             record_exception_event(self._span, sys.exc_info()[1])
 
         if not self._socket:
@@ -936,6 +934,7 @@ class MySQLConnection(MySQLConnectionAbstract):
         ):
             raise ValueError("Invalid command REFRESH option")
 
+        res = None
         if options & RefreshOption.GRANT:
             res = self.cmd_query("FLUSH PRIVILEGES")
         if options & RefreshOption.LOG:
@@ -1029,7 +1028,7 @@ class MySQLConnection(MySQLConnectionAbstract):
         username: str = "",
         password: str = "",
         database: str = "",
-        charset: int = 45,
+        charset: Optional[int] = None,
         password1: str = "",
         password2: str = "",
         password3: str = "",
@@ -1043,10 +1042,14 @@ class MySQLConnection(MySQLConnectionAbstract):
 
         Returns a dict()
         """
-        if not isinstance(charset, int):
-            raise ValueError("charset must be an integer")
-        if charset < 0:
-            raise ValueError("charset should be either zero or a postive integer")
+        # If charset isn't defined, we use the same charset ID defined previously,
+        # otherwise, we run a verification and update the charset ID.
+        if charset is not None:
+            if not isinstance(charset, int):
+                raise ValueError("charset must be an integer")
+            if charset < 0:
+                raise ValueError("charset should be either zero or a postive integer")
+            self._charset_id = charset
 
         self._mfa_nfactor = 1
         self._user = username
@@ -1056,7 +1059,7 @@ class MySQLConnection(MySQLConnectionAbstract):
         self._password3 = password3
 
         if self._password1 and password != self._password1:
-            password = self._password1
+            self._password = self._password1
 
         self.handle_unread_result()
 
@@ -1072,11 +1075,11 @@ class MySQLConnection(MySQLConnectionAbstract):
             sock=self._socket,
             handshake=self._handshake,
             username=self._user,
-            password1=password,
+            password1=self._password,
             password2=self._password2,
             password3=self._password3,
             database=database,
-            charset=charset,
+            charset=self._charset_id,
             client_flags=self._client_flags,
             auth_plugin=self._auth_plugin,
             auth_plugin_class=self._auth_plugin_class,
@@ -1091,7 +1094,6 @@ class MySQLConnection(MySQLConnectionAbstract):
         if not (self._client_flags & ClientFlag.CONNECT_WITH_DB) and database:
             self.cmd_init_db(database)
 
-        self._charset_id = charset
         self._post_connection()
 
         # return ok_pkt
@@ -1227,10 +1229,10 @@ class MySQLConnection(MySQLConnectionAbstract):
 
         It is possible to also give a custom cursor through the
         cursor_class parameter, but it needs to be a subclass of
-        mysql.connector.cursor.CursorBase.
+        mysql.connector.cursor.MySQLCursor.
 
         Raises ProgrammingError when cursor_class is not a subclass of
-        CursorBase. Raises ValueError when cursor is not available.
+        MySQLCursor. Raises ValueError when cursor is not available.
 
         Returns a cursor-object
         """
@@ -1239,9 +1241,9 @@ class MySQLConnection(MySQLConnectionAbstract):
         if not self.is_connected():
             raise OperationalError("MySQL Connection not available")
         if cursor_class is not None:
-            if not issubclass(cursor_class, CursorBase):
+            if not issubclass(cursor_class, MySQLCursor):
                 raise ProgrammingError(
-                    "Cursor class needs be to subclass of cursor.CursorBase"
+                    "Cursor class needs be to subclass of MySQLCursor"
                 )
             return (cursor_class)(self)
 
@@ -1275,6 +1277,9 @@ class MySQLConnection(MySQLConnectionAbstract):
             24: MySQLCursorPreparedNamedTuple,
         }
         try:
+            raise_warning_against_deprecated_cursor_class(
+                cursor_name=types[cursor_type].__name__
+            )
             return (types[cursor_type])(self)
         except KeyError:
             args = ("buffered", "raw", "dictionary", "named_tuple", "prepared")

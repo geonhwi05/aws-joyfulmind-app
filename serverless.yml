@@ -5,20 +5,11 @@ app: joyfulmind-app
 # "service" is the name of this project. This will also be added to your AWS resource names.
 service: aws-joyfulmind-app
 
-custom:
-  wsgi:
-    app: app.app
-  pythonRequirements:
-    dockerizePip: true
-    useStaticCache: false
-    useDownloadCache: false
-    pipCmdExtraArgs:
-      - "--no-cache-dir"
-
 provider:
   name: aws
   runtime: python3.10
   region: ap-northeast-2
+  profile: api_dev
 
 functions:
   api:
@@ -31,6 +22,15 @@ functions:
           path: /{proxy+}
           method: ANY
 
+custom:
+  wsgi:
+    app: app.app
+  pythonRequirements:
+    dockerizePip: true  # Docker 사용 설정
+    useStaticCache: false
+    slim: true
+    strip: false
+
 plugins:
   - serverless-wsgi
   - serverless-python-requirements
@@ -38,10 +38,13 @@ plugins:
 package:
   individually: true
   exclude:
-    - node_modules/**  # node_modules 폴더와 그 하위 모든 파일 및 디렉토리 제외
-    - .git/**  # .git 폴더와 그 하위 모든 파일 및 디렉토리 제외
-    - tests/**  # tests 폴더와 그 하위 모든 파일 및 디렉토리 제외
+    - node_modules/**
+    - .git/**
+    - tests/**
+    - "**/*.csv"
   include:
-    - app/**  # app 폴더와 그 하위 모든 파일 및 디렉토리 포함
-    - handler.py  # 루트 디렉토리의 handler.py 파일 포함
-    - config/**  # config 폴더와 그 하위 모든 파일 및 디렉토리 포함
+    - src/**
+    - handler.py
+    - config/**
+    - sbert_model/**
+    - data/**

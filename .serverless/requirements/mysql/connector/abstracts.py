@@ -72,6 +72,8 @@ except ImportError:
 from .constants import (
     CONN_ATTRS_DN,
     DEFAULT_CONFIGURATION,
+    MYSQL_DEFAULT_CHARSET_ID_57,
+    MYSQL_DEFAULT_CHARSET_ID_80,
     OPENSSL_CS_NAMES,
     TLS_CIPHER_SUITES,
     TLS_VERSIONS,
@@ -106,7 +108,9 @@ from .optionfiles import read_option_files
 from .tls_ciphers import UNACCEPTABLE_TLS_CIPHERSUITES, UNACCEPTABLE_TLS_VERSIONS
 from .types import (
     BinaryProtocolType,
+    CextEofPacketType,
     DescriptionType,
+    EofPacketType,
     HandShakeType,
     MySQLConvertibleType,
     RowItemType,
@@ -172,13 +176,20 @@ class MySQLConnectionAbstract(ABC):
 
     def __init__(self) -> None:
         """Initialize"""
-        # opentelemetry related
-        self._tracer: Any = None
-        self._span: Any = None
-        self.otel_context_propagation: bool = True
+        # private (shouldn't be manipulated directly internally)
+        self.__charset_id: Optional[int] = None
+        """It shouldn't be manipulated directly, even internally. If you need
+        to manipulate the charset ID, use the property `_charset_id` (read & write)
+        instead. Similarly, `_charset_id` shouldn't be manipulated externally,
+        in this case, use property `charset_id` (read-only).
+        """
+
+        # protected (can be manipulated directly internally)
+        self._tracer: Any = None  # opentelemetry related
+        self._span: Any = None  # opentelemetry related
+        self.otel_context_propagation: bool = True  # opentelemetry related
 
         self._client_flags: int = ClientFlag.get_default()
-        self._charset_id: int = 45
         self._sql_mode: Optional[str] = None
         self._time_zone: Optional[str] = None
         self._autocommit: bool = False
@@ -1176,6 +1187,18 @@ class MySQLConnectionAbstract(ABC):
         self._unread_result = value
 
     @property
+    def collation(self) -> str:
+        """Returns the collation for current connection.
+
+        This property returns the collation name of the current connection.
+        The server is queried when the connection is active. If not connected,
+        the configured collation name is returned.
+
+        Returns a string.
+        """
+        return self._character_set.get_charset_info(self._charset_id)[2]
+
+    @property
     def charset(self) -> str:
         """Returns the character set for current connection.
 
@@ -1186,6 +1209,41 @@ class MySQLConnectionAbstract(ABC):
         Returns a string.
         """
         return self._character_set.get_info(self._charset_id)[0]
+
+    @property
+    def charset_id(self) -> int:
+        """The charset ID utilized during the connection phase.
+
+        If the charset ID hasn't been set, the default charset ID is returned.
+        """
+        return self._charset_id
+
+    @property
+    def _charset_id(self) -> int:
+        """The charset ID utilized during the connection phase.
+
+        If the charset ID hasn't been set, the default charset ID is returned.
+        """
+        if self.__charset_id is None:
+            if self._server_version is None:
+                # We mustn't set the private since we still don't know
+                # the server version. We temporarily return the default
+                # charset for undefined scenarios - eventually, the server
+                # info will be available and the private variable will be set.
+                return MYSQL_DEFAULT_CHARSET_ID_57
+
+            self.__charset_id = (
+                MYSQL_DEFAULT_CHARSET_ID_57
+                if self._server_version < (8, 0)
+                else MYSQL_DEFAULT_CHARSET_ID_80
+            )
+
+        return self.__charset_id
+
+    @_charset_id.setter
+    def _charset_id(self, value: int) -> None:
+        """Sets the charset ID utilized during the connection phase."""
+        self.__charset_id = value
 
     @property
     def python_charset(self) -> str:
@@ -1267,27 +1325,8 @@ class MySQLConnectionAbstract(ABC):
 
         self._execute_query(f"SET NAMES '{charset_name}' COLLATE '{collation_name}'")
 
-        try:
-            # Required for C Extension
-            self.set_character_set_name(charset_name)
-        except AttributeError:
-            # Not required for pure Python connection
-            pass
-
         if self.converter:
             self.converter.set_charset(charset_name, character_set=self._character_set)
-
-    @property
-    def collation(self) -> str:
-        """Returns the collation for current connection.
-
-        This property returns the collation name of the current connection.
-        The server is queried when the connection is active. If not connected,
-        the configured collation name is returned.
-
-        Returns a string.
-        """
-        return self._character_set.get_charset_info(self._charset_id)[2]
 
     @property
     @abstractmethod
@@ -1309,7 +1348,7 @@ class MySQLConnectionAbstract(ABC):
         established. Some setting like autocommit, character set, and SQL mode
         are set using this method.
         """
-        self.set_charset_collation(self._charset_id)
+        self.set_charset_collation(charset=self._charset_id)
         self.autocommit = self._autocommit
         if self._time_zone:
             self.time_zone = self._time_zone
@@ -1410,6 +1449,7 @@ class MySQLConnectionAbstract(ABC):
         span = None
 
         if self._tracer:
+            # pylint: disable=possibly-used-before-assignment
             span = self._tracer.start_span(
                 name=CONNECTION_SPAN_NAME, kind=trace.SpanKind.CLIENT
             )
@@ -1516,7 +1556,7 @@ class MySQLConnectionAbstract(ABC):
         but not raw.
 
         It is possible to also give a custom cursor through the `cursor_class`
-        parameter, but it needs to be a subclass of `mysql.connector.cursor.CursorBase`
+        parameter, but it needs to be a subclass of `mysql.connector.cursor.MySQLCursor`
         or `mysql.connector.cursor_cext.CMySQLCursor` according to the type of
         connection that's being used.
 
@@ -1529,9 +1569,9 @@ class MySQLConnectionAbstract(ABC):
                  better performance or when you want to do the conversion yourself.
             prepared: If `True`, the cursor is used for executing prepared statements.
             cursor_class: It can be used to pass a class to use for instantiating a
-                          new cursor. It must be a subclass of `cursor.CursorBase` or
-                          `cursor_cext.CMySQLCursor` according to the type of connection
-                          that's being used.
+                          new cursor. It must be a subclass of `cursor.MySQLCursor`
+                          or `cursor_cext.CMySQLCursor` according to the type of
+                          connection that's being used.
             dictionary: If `True`, the cursor returns rows as dictionaries.
             named_tuple: If `True`, the cursor returns rows as named tuples.
 
@@ -1990,7 +2030,7 @@ class MySQLConnectionAbstract(ABC):
         username: str = "",
         password: str = "",
         database: str = "",
-        charset: int = 45,
+        charset: Optional[int] = None,
         password1: str = "",
         password2: str = "",
         password3: str = "",
@@ -2001,7 +2041,8 @@ class MySQLConnectionAbstract(ABC):
 
         It also causes the specified database to become the default (current)
         database. It is also possible to change the character set using the
-        charset argument.
+        charset argument. The character set passed during initial connection
+        is reused if no value of charset is passed via this method.
 
         Args:
             username: New account's username.
@@ -2164,8 +2205,15 @@ class MySQLCursorAbstract(ABC):
     required by the Python Database API Specification v2.0.
     """
 
-    def __init__(self) -> None:
-        """Initialization"""
+    def __init__(self, connection: Optional[MySQLConnectionAbstract] = None) -> None:
+        """Defines the MySQL cursor interface."""
+
+        self._connection: Optional[MySQLConnectionAbstract] = connection
+        if connection is not None:
+            if not isinstance(connection, MySQLConnectionAbstract):
+                raise InterfaceError(errno=2048)
+            self._connection = weakref.proxy(connection)
+
         self._description: Optional[List[DescriptionType]] = None
         self._rowcount: int = -1
         self._last_insert_id: Optional[int] = None
@@ -2175,6 +2223,14 @@ class MySQLCursorAbstract(ABC):
         self._executed_list: List[StrOrBytes] = []
         self._stored_results: List[MySQLCursorAbstract] = []
         self.arraysize: int = 1
+        self._binary: bool = False
+        self._raw: bool = False
+        self._nextrow: Tuple[
+            Optional[RowType], Optional[Union[EofPacketType, CextEofPacketType]]
+        ] = (
+            None,
+            None,
+        )
 
     def __enter__(self) -> MySQLCursorAbstract:
         return self
@@ -2431,7 +2487,6 @@ class MySQLCursorAbstract(ABC):
         """Resets the cursor to default"""
 
     @property
-    @abstractmethod
     def description(self) -> Optional[List[DescriptionType]]:
         """This read-only property returns a list of tuples describing the columns in a
         result set.
@@ -2460,7 +2515,6 @@ class MySQLCursorAbstract(ABC):
         return self._description
 
     @property
-    @abstractmethod
     def rowcount(self) -> int:
         """Returns the number of rows produced or affected.
 
@@ -2539,8 +2593,6 @@ class MySQLCursorAbstract(ABC):
         Returns:
             List of existing query attributes.
         """
-        if hasattr(self, "_cnx"):
-            return self._cnx.query_attrs
         if hasattr(self, "_connection"):
             return self._connection.query_attrs
         return None
@@ -2565,9 +2617,7 @@ class MySQLCursorAbstract(ABC):
             raise ProgrammingError(
                 f"Object {value} cannot be converted to a MySQL type"
             )
-        if hasattr(self, "_cnx"):
-            self._cnx.query_attrs_append((name, value))
-        elif hasattr(self, "_connection"):
+        if hasattr(self, "_connection"):
             self._connection.query_attrs_append((name, value))
 
     def remove_attribute(self, name: str) -> BinaryProtocolType:
@@ -2583,15 +2633,11 @@ class MySQLCursorAbstract(ABC):
         """
         if not isinstance(name, str):
             raise ProgrammingError("Parameter `name` must be a string type")
-        if hasattr(self, "_cnx"):
-            return self._cnx.query_attrs_remove(name)
         if hasattr(self, "_connection"):
             return self._connection.query_attrs_remove(name)
         return None
 
     def clear_attributes(self) -> None:
         """Clears the list of query attributes on the connector's side."""
-        if hasattr(self, "_cnx"):
-            self._cnx.query_attrs_clear()
-        elif hasattr(self, "_connection"):
+        if hasattr(self, "_connection"):
             self._connection.query_attrs_clear()

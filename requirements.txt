@@ -5,3 +5,5 @@ psycopg-binary
 passlib
 flask-jwt-extended
 email-validator
+serverless-wsgi
+spotipy

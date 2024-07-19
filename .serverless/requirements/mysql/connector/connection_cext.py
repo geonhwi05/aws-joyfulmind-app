@@ -50,7 +50,14 @@ from typing import (
 
 from . import version
 from .abstracts import CMySQLPrepStmt, MySQLConnectionAbstract
-from .constants import ClientFlag, FieldFlag, FieldType, ServerFlag, ShutdownType
+from .constants import (
+    ClientFlag,
+    FieldFlag,
+    FieldType,
+    ServerFlag,
+    ShutdownType,
+    raise_warning_against_deprecated_cursor_class,
+)
 from .conversion import MySQLConverter
 from .errors import (
     InterfaceError,
@@ -352,6 +359,7 @@ class CMySQLConnection(MySQLConnectionAbstract):
     def close(self) -> None:
         """Disconnect from the MySQL server"""
         if self._span and self._span.is_recording():
+            # pylint: disable=possibly-used-before-assignment
             record_exception_event(self._span, sys.exc_info()[1])
 
         if not self._cmysql:
@@ -746,7 +754,7 @@ class CMySQLConnection(MySQLConnectionAbstract):
         mysql.connector.cursor_cext.CMySQLCursor.
 
         Raises ProgrammingError when cursor_class is not a subclass of
-        CursorBase. Raises ValueError when cursor is not available.
+        CMySQLCursor. Raises ValueError when cursor is not available.
 
         Returns instance of CMySQLCursor or subclass.
 
@@ -799,6 +807,9 @@ class CMySQLConnection(MySQLConnectionAbstract):
             24: CMySQLCursorPreparedNamedTuple,
         }
         try:
+            raise_warning_against_deprecated_cursor_class(
+                cursor_name=types[cursor_type].__name__
+            )
             return (types[cursor_type])(self)
         except KeyError:
             args = ("buffered", "raw", "dictionary", "named_tuple", "prepared")
@@ -896,7 +907,7 @@ class CMySQLConnection(MySQLConnectionAbstract):
         username: str = "",
         password: str = "",
         database: str = "",
-        charset: int = 45,
+        charset: Optional[int] = None,
         password1: str = "",
         password2: str = "",
         password3: str = "",
@@ -921,7 +932,14 @@ class CMySQLConnection(MySQLConnectionAbstract):
                 msg=err.msg, errno=err.errno, sqlstate=err.sqlstate
             ) from err
 
-        self._charset_id = charset
+        # If charset isn't defined, we use the same charset ID defined previously,
+        # otherwise, we run a verification and update the charset ID.
+        if charset is not None:
+            if not isinstance(charset, int):
+                raise ValueError("charset must be an integer")
+            if charset < 0:
+                raise ValueError("charset should be either zero or a postive integer")
+            self._charset_id = charset
         self._user = username  # updating user accordingly
         self._post_connection()
 

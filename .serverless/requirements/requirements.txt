@@ -5,3 +5,5 @@ flask-restful
 mysql-connector-python
 passlib
 psycopg-binary
+serverless-wsgi
+spotipy
