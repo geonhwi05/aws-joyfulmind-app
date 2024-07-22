@@ -200,3 +200,42 @@ class UserNicknameChangeResource(Resource):
             return {'result': 'fail', 'error': str(e)}, 500
 
         return {'result': 'success'}
+    
+class UserInformationResource(Resource):
+    @jwt_required()
+    def get(self):
+        userId = get_jwt_identity()
+        try:
+            connection = get_connection()
+
+            query = '''
+                    SELECT * FROM user
+                    WHERE id = %s;'''
+            record = (userId,)
+
+            # 딕셔너리 True 파라미터를 설정하여 데이터를 딕셔너리로 받는다
+            cursor = connection.cursor(dictionary=True)
+        
+            cursor.execute(query, record)
+
+            result_list = cursor.fetchall()
+
+            cursor.close()
+            connection.close()
+
+        except Error as e:
+            if cursor is not None:
+                cursor.close()
+            if connection is not None:
+                connection.close()
+            return {'result': 'fail', 'error': str(e)}, 500
+
+        i=0
+        # 3. 클라이언트에 json으로 만들어서 응답한다.
+        for row in result_list:
+            result_list[i]['birthDate'] = row['birthDate'].isoformat()
+            result_list[i]['createdAt'] = row['createdAt'].isoformat()
+            result_list[i]['updatedAt'] = row['updatedAt'].isoformat()
+            i = i + 1
+
+        return {'result': 'success', 'item': result_list, 'count': len(result_list)}
