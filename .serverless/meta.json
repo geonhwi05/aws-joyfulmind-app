@@ -184,7 +184,7 @@
                   "S3Bucket": {
                     "Ref": "ServerlessDeploymentBucket"
                   },
-                  "S3Key": "serverless/aws-joyfulmind-app/dev/1721376232356-2024-07-19T08:03:52.356Z/api.zip"
+                  "S3Key": "serverless/aws-joyfulmind-app/dev/1721465542011-2024-07-20T08:52:22.011Z/api.zip"
                 },
                 "Handler": "wsgi_handler.handler",
                 "Runtime": "python3.10",
@@ -202,14 +202,14 @@
                 "ApiLogGroup"
               ]
             },
-            "ApiLambdaVersionzuKLy0rdfgKtW82a25DVIfIljUZf5WDXDQ37EXCJdk": {
+            "ApiLambdaVersionx82xMYGUG7AMq4pct5GiU0JyEh8hyqU2apjzf1Tamrg": {
               "Type": "AWS::Lambda::Version",
               "DeletionPolicy": "Retain",
               "Properties": {
                 "FunctionName": {
                   "Ref": "ApiLambdaFunction"
                 },
-                "CodeSha256": "5szQtt5r5l2TfvxOxMwNuPpLknoqYQL4yOUNBzpzdb8="
+                "CodeSha256": "IVsAU1Vagend0buyko3LUF0Eb0nWqS9GYajNf3X+If0="
               }
             },
             "ApiGatewayRestApi": {
@@ -334,7 +334,7 @@
                 "ApiLambdaPermissionApiGateway"
               ]
             },
-            "ApiGatewayDeployment1721376155625": {
+            "ApiGatewayDeployment1721465446112": {
               "Type": "AWS::ApiGateway::Deployment",
               "Properties": {
                 "RestApiId": {
@@ -397,7 +397,7 @@
             "ApiLambdaFunctionQualifiedArn": {
               "Description": "Current Lambda function version",
               "Value": {
-                "Ref": "ApiLambdaVersionzuKLy0rdfgKtW82a25DVIfIljUZf5WDXDQ37EXCJdk"
+                "Ref": "ApiLambdaVersionx82xMYGUG7AMq4pct5GiU0JyEh8hyqU2apjzf1Tamrg"
               },
               "Export": {
                 "Name": "sls-aws-joyfulmind-app-dev-ApiLambdaFunctionQualifiedArn"
@@ -543,7 +543,7 @@
           "timeout": 6,
           "runtime": "python3.10",
           "vpc": {},
-          "versionLogicalId": "ApiLambdaVersionzuKLy0rdfgKtW82a25DVIfIljUZf5WDXDQ37EXCJdk"
+          "versionLogicalId": "ApiLambdaVersionx82xMYGUG7AMq4pct5GiU0JyEh8hyqU2apjzf1Tamrg"
         }
       },
       "custom": {
@@ -582,7 +582,7 @@
           "serverless_wsgi.py",
           ".serverless-wsgi"
         ],
-        "artifactDirectoryName": "serverless/aws-joyfulmind-app/dev/1721376232356-2024-07-19T08:03:52.356Z"
+        "artifactDirectoryName": "serverless/aws-joyfulmind-app/dev/1721465542011-2024-07-20T08:52:22.011Z"
       }
     },
     "serviceRawFile": "# \"org\" ensures this Service is used with the correct Serverless Framework Access Key.\r\norg: onmyway\r\n# \"app\" enables Serverless Framework Dashboard features and sharing them with other Services.\r\napp: joyfulmind-app\r\n# \"service\" is the name of this project. This will also be added to your AWS resource names.\r\nservice: aws-joyfulmind-app\r\n\r\nprovider:\r\n  name: aws\r\n  runtime: python3.10\r\n  region: ap-northeast-2\r\n  profile: api_dev\r\n\r\nfunctions:\r\n  api:\r\n    handler: wsgi_handler.handler\r\n    events:\r\n      - http:\r\n          path: /\r\n          method: ANY\r\n      - http:\r\n          path: /{proxy+}\r\n          method: ANY\r\n\r\ncustom:\r\n  wsgi:\r\n    app: app.app\r\n  pythonRequirements:\r\n    dockerizePip: true  # Docker 사용 설정\r\n    useStaticCache: false\r\n    slim: true\r\n    strip: false\r\n\r\nplugins:\r\n  - serverless-wsgi\r\n  - serverless-python-requirements\r\n\r\npackage:\r\n  individually: true\r\n  exclude:\r\n    - node_modules/**\r\n    - .git/**\r\n    - tests/**\r\n    - \"**/*.csv\"\r\n  include:\r\n    - src/**\r\n    - handler.py\r\n    - config/**\r\n    - sbert_model/**\r\n    - data/**\r\n",
@@ -592,7 +592,7 @@
     "options": {},
     "error": null,
     "params": {},
-    "machineId": "c7734a7dc11760152f671f2cb8fe630b",
+    "machineId": "3cebe96beb8d939b879a41f734fe375b",
     "accessKeyV2": "<REDACTED>",
     "accessKeyV1": "<REDACTED>",
     "orgId": "d1f23b94-a7b2-40f8-92e4-f9fcc3ca4d86",
@@ -619,12 +619,12 @@
     "serviceProviderAwsCfStackName": "aws-joyfulmind-app-dev",
     "serviceProviderAwsCfStackId": "arn:aws:cloudformation:ap-northeast-2:891377200956:stack/aws-joyfulmind-app-dev/cb53c330-3607-11ef-8fb3-0292bd717ac7",
     "serviceProviderAwsCfStackCreated": "2024-06-29T11:07:37.666Z",
-    "serviceProviderAwsCfStackUpdated": "2024-07-19T08:04:07.770Z",
+    "serviceProviderAwsCfStackUpdated": "2024-07-20T08:52:27.714Z",
     "serviceProviderAwsCfStackStatus": "UPDATE_COMPLETE",
     "serviceProviderAwsCfStackOutputs": [
       {
         "OutputKey": "ApiLambdaFunctionQualifiedArn",
-        "OutputValue": "arn:aws:lambda:ap-northeast-2:891377200956:function:aws-joyfulmind-app-dev-api:27",
+        "OutputValue": "arn:aws:lambda:ap-northeast-2:891377200956:function:aws-joyfulmind-app-dev-api:28",
         "Description": "Current Lambda function version",
         "ExportName": "sls-aws-joyfulmind-app-dev-ApiLambdaFunctionQualifiedArn"
       },

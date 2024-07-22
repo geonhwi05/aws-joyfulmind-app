@@ -1,6 +1,6 @@
 from email_validator import EmailNotValidError, validate_email
 from flask import request
-from flask_jwt_extended import create_access_token, get_jwt, jwt_required,get_jwt_identity
+from flask_jwt_extended import create_access_token, get_jwt, jwt_required, get_jwt_identity
 from mysql.connector import Error
 from flask_restful import Resource
 from datetime import datetime
@@ -125,11 +125,11 @@ class UserPasswordChangeResource(Resource):
         data = request.get_json()
 
         # 필요한 데이터 필드 확인
-        if 'old_password' not in data or 'new_password' not in data:
+        if 'oldPassword' not in data or 'newPassword' not in data:
             return {'result': 'fail', 'message': 'Missing required fields'}, 400
 
         # 새 비밀번호 길이 유효성 검사
-        if len(data['new_password']) < 4 or len(data['new_password']) > 12:
+        if len(data['newPassword']) < 4 or len(data['newPassword']) > 12:
             return {'result': 'fail', 'message': 'Password must be between 4 and 12 characters'}, 400
 
         user_id = get_jwt_identity()
@@ -142,19 +142,19 @@ class UserPasswordChangeResource(Resource):
             cursor.execute(query, (user_id,))
             result = cursor.fetchone()
 
-            if not result or not check_password(data['old_password'], result['password']):
+            if not result or not check_password(data['oldPassword'], result['password']):
                 cursor.close()
                 connection.close()
                 return {'result': 'fail', 'message': 'Incorrect old password'}, 400
 
             # 새 비밀번호가 현재 비밀번호와 동일한지 확인
-            if check_password(data['new_password'], result['password']):
+            if check_password(data['newPassword'], result['password']):
                 cursor.close()
                 connection.close()
                 return {'result': 'fail', 'message': 'New password must be different from the old password'}, 400
 
             # 새 비밀번호 암호화 및 업데이트
-            new_password = hash_password(data['new_password'])
+            new_password = hash_password(data['newPassword'])
             query = '''UPDATE user SET password = %s WHERE id = %s;'''
             cursor.execute(query, (new_password, user_id))
             connection.commit()
@@ -177,7 +177,7 @@ class UserNicknameChangeResource(Resource):
     def put(self):
         data = request.get_json()
 
-        if 'new_nickname' not in data:
+        if 'newNickname' not in data:
             return {'result': 'fail', 'message': 'Missing required fields'}, 400
 
         user_id = get_jwt_identity()
@@ -186,7 +186,7 @@ class UserNicknameChangeResource(Resource):
             connection = get_connection()
             query = '''UPDATE user SET nickname = %s WHERE id = %s;'''
             cursor = connection.cursor()
-            cursor.execute(query, (data['new_nickname'], user_id))
+            cursor.execute(query, (data['newNickname'], user_id))
             connection.commit()
 
             cursor.close()
@@ -200,3 +200,33 @@ class UserNicknameChangeResource(Resource):
             return {'result': 'fail', 'error': str(e)}, 500
 
         return {'result': 'success'}
+
+# 유저 프로필 정보
+class UserProfileResource(Resource):
+    @jwt_required()
+    def get(self):
+        user_id = get_jwt_identity()
+
+        try:
+            connection = get_connection()   
+            query = '''SELECT email, nickname, gender, birthDate FROM user WHERE id = %s;'''
+            cursor = connection.cursor(dictionary=True)
+            cursor.execute(query, (user_id,))
+            result = cursor.fetchone()
+
+            cursor.close()
+            connection.close()
+
+            if result:
+                # birthDate를 문자열로 변환
+                result['birthDate'] = result['birthDate'].strftime('%Y-%m-%d')
+                return {'result': 'success', 'user': result}, 200
+            else:
+                return {'result': 'fail', 'message': 'User not found'}, 404
+
+        except Error as e:
+            if cursor is not None:
+                cursor.close()
+            if connection is not None:
+                connection.close()
+            return {'result': 'fail', 'error': str(e)}, 500
