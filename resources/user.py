@@ -208,7 +208,7 @@ class UserProfileResource(Resource):
         user_id = get_jwt_identity()
 
         try:
-            connection = get_connection()   
+            connection = get_connection()
             query = '''SELECT email, nickname, gender, birthDate FROM user WHERE id = %s;'''
             cursor = connection.cursor(dictionary=True)
             cursor.execute(query, (user_id,))
