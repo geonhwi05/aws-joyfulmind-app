@@ -7,4 +7,3 @@ flask-jwt-extended
 email-validator
 serverless-wsgi
 spotipy
-werkzeug.utils
