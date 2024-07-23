@@ -30,7 +30,6 @@ api.add_resource(DiaryListResource, '/diary')
 api.add_resource(DiaryResourece, '/diary/<int:userId>')
 api.add_resource(UserPasswordChangeResource,'/user/updatedpwd')
 api.add_resource(UserNicknameChangeResource,'/user/updatednickname')
-api.add_resource(UserProfileImgChangeResource,'/user/updatedprofileImg')
 api.add_resource(UserProfileResource,'/user/profile')
 
 # 모든 예외를 처리하는 핸들러 추가
