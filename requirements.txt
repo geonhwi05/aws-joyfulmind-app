@@ -8,3 +8,4 @@ email-validator
 serverless-wsgi
 spotipy
 werkzeug
+

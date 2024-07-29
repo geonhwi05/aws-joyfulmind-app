@@ -6,8 +6,6 @@ from flask_restful import Resource
 from datetime import datetime
 from mysql_connection import get_connection
 from utils import check_password, hash_password
-from werkzeug.utils import secure_filename
-import boto3
 
 
 class UserRegisterResource(Resource):
