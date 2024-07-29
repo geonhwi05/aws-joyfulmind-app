@@ -204,64 +204,6 @@ class UserNicknameChangeResource(Resource):
 
         return {'result': 'success'}
 
-# 프사 수정
-class UserProfileImgChangeResource(Resource):
-
-    @jwt_required()
-    def put(self):
-        user_id = get_jwt_identity()
-
-        # S3 버킷 설정
-        S3_BUCKET = 'aws-joyfulmind-app-dev-serverlessdeploymentbucket-jez8xfu2g1hu'
-        S3_REGION = 'ap-northeast-2'
-        S3_BASE_URL = f'https://{S3_BUCKET}.s3.{S3_REGION}.amazonaws.com/'
-        # boto3 S3 클라이언트 초기화
-        s3_client = boto3.client('s3')
-
-        if 'profileImage' not in request.files:
-            return {'result': 'fail', 'error': '파일이 없습니다'}, 400
-
-        file = request.files['profileImage']
-        
-        if file.filename == '':
-            return {'result': 'fail', 'error': '선택된 파일이 없습니다'}, 400
-
-        if file:
-            filename = secure_filename(file.filename)
-            file_extension = filename.rsplit('.', 1)[1].lower()
-            s3_filename = f'user_{user_id}/profile.{file_extension}'
-            try:
-                s3_client.upload_fileobj(
-                    file,
-                    S3_BUCKET,
-                    s3_filename,
-                    ExtraArgs={'ACL': 'public-read'}
-                )
-                s3_file_url = S3_BASE_URL + s3_filename
-
-                try:
-                    connection = get_connection()
-                    query = '''UPDATE user SET profileImage = %s WHERE id = %s;'''
-                    cursor = connection.cursor()
-                    cursor.execute(query, (s3_file_url, user_id))
-                    connection.commit()
-
-                    cursor.close()
-                    connection.close()
-
-                except Error as e:
-                    if cursor is not None:
-                        cursor.close()
-                    if connection is not None:
-                        connection.close()
-                    return {'result': 'fail', 'error': str(e)}, 500
-
-                return {'result': 'success', 'file_url': s3_file_url}
-            except Exception as e:
-                return {'result': 'fail', 'error': str(e)}, 500
-        else:
-            return {'result': 'fail', 'error': '파일 업로드 실패'}, 400
-
 # 유저 프로필 정보
 class UserProfileResource(Resource):
     @jwt_required()
@@ -270,7 +212,7 @@ class UserProfileResource(Resource):
 
         try:
             connection = get_connection()
-            query = '''SELECT email, nickname, gender, birthDate, profileImage FROM user WHERE id = %s;'''
+            query = '''SELECT email, nickname, gender, birthDate FROM user WHERE id = %s;'''
             cursor = connection.cursor(dictionary=True)
             cursor.execute(query, (user_id,))
             result = cursor.fetchone()

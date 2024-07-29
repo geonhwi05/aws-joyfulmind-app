@@ -3,9 +3,9 @@ import logging
 from flask import Flask, jsonify
 from flask_restful import Api
 from flask_jwt_extended import JWTManager
-from resources.user import UserNicknameChangeResource,UserPasswordChangeResource, UserProfileImgChangeResource, UserProfileResource, UserRegisterResource, UserLoginResource, UserLogoutResource
+from resources.user import UserNicknameChangeResource,UserPasswordChangeResource,UserProfileResource, UserRegisterResource, UserLoginResource, UserLogoutResource
 from resources.recommend import RecommendResource
-from resources.diary import DiaryListResource, DiaryResourece
+from resources.diary import DiaryListResource, DiaryRangeResource, DiaryResource
 from resources.user import jwt_blacklist
 
 app = Flask(__name__)
@@ -27,11 +27,11 @@ api.add_resource(UserLoginResource, '/user/login')
 api.add_resource(UserLogoutResource, '/user/logout')
 api.add_resource(RecommendResource, '/recommend')
 api.add_resource(DiaryListResource, '/diary')
-api.add_resource(DiaryResourece, '/diary/<int:userId>')
+api.add_resource(DiaryResource, '/diary/<int:diaryId>')
 api.add_resource(UserPasswordChangeResource,'/user/updatedpwd')
 api.add_resource(UserNicknameChangeResource,'/user/updatednickname')
-api.add_resource(UserProfileImgChangeResource,'/user/updatedprofileImg')
 api.add_resource(UserProfileResource,'/user/profile')
+api.add_resource(DiaryRangeResource, '/diary/range')
 
 # 모든 예외를 처리하는 핸들러 추가
 @app.errorhandler(Exception)

@@ -162,7 +162,7 @@
           "S3Bucket": {
             "Ref": "ServerlessDeploymentBucket"
           },
-          "S3Key": "serverless/aws-joyfulmind-app/dev/1721465542011-2024-07-20T08:52:22.011Z/api.zip"
+          "S3Key": "serverless/aws-joyfulmind-app/dev/1721983903349-2024-07-26T08:51:43.349Z/api.zip"
         },
         "Handler": "wsgi_handler.handler",
         "Runtime": "python3.10",
@@ -180,14 +180,14 @@
         "ApiLogGroup"
       ]
     },
-    "ApiLambdaVersionx82xMYGUG7AMq4pct5GiU0JyEh8hyqU2apjzf1Tamrg": {
+    "ApiLambdaVersion5w6wvzaXWLFRo8CFMUkEOqpjmVzx8tUwgpaAeHA6J80": {
       "Type": "AWS::Lambda::Version",
       "DeletionPolicy": "Retain",
       "Properties": {
         "FunctionName": {
           "Ref": "ApiLambdaFunction"
         },
-        "CodeSha256": "IVsAU1Vagend0buyko3LUF0Eb0nWqS9GYajNf3X+If0="
+        "CodeSha256": "twHFZ8UkBKn32yd5uTkYV44ZMeN89barn+dQLpDSGOA="
       }
     },
     "ApiGatewayRestApi": {
@@ -312,7 +312,7 @@
         "ApiLambdaPermissionApiGateway"
       ]
     },
-    "ApiGatewayDeployment1721465446112": {
+    "ApiGatewayDeployment1721983801240": {
       "Type": "AWS::ApiGateway::Deployment",
       "Properties": {
         "RestApiId": {
@@ -375,7 +375,7 @@
     "ApiLambdaFunctionQualifiedArn": {
       "Description": "Current Lambda function version",
       "Value": {
-        "Ref": "ApiLambdaVersionx82xMYGUG7AMq4pct5GiU0JyEh8hyqU2apjzf1Tamrg"
+        "Ref": "ApiLambdaVersion5w6wvzaXWLFRo8CFMUkEOqpjmVzx8tUwgpaAeHA6J80"
       },
       "Export": {
         "Name": "sls-aws-joyfulmind-app-dev-ApiLambdaFunctionQualifiedArn"
